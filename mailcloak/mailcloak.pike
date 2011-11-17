@@ -18,6 +18,24 @@ private constant table_definitions =
   ]);
 
 
+
+// Templates
+
+constant CAPTCHA_TEMPLATE = #"Please type these letters
+		    <input type='hidden' name='lock' value=':lock:'>
+                    <img src=':src:' width=:width: height=:height:>
+		    <input size=6 type='text' name='key'><br>\n";
+  
+
+constant COMPOSE_TEMPLATE = #"<html><head><title>Compose Email</title></head><body>
+<center><table><form action=':send_location:' method='post'>
+<tr><td>To:</td><td>
+<img src=':email_graphic:'</td></tr><tr><td>
+Your Name:</td><td><input type=text size=30 name=name /></td></tr><tr><td>
+Your Email:</td><td><input type=text size=30 name=email /></td></tr><tr><td>
+Your IP:</td><td>&client.ip;</td></tr><tr><td colspan=2>:captcha:</td></tr><tr><td colspan=2>
+<textarea name=comment rows=25 cols=40></textarea></td></tr><tr><td colspan=2><input type=submit value=send><br></td></tr></form></table></center></body></html>";
+
 void create()
 {
   defvar("database",
@@ -38,127 +56,69 @@ void create()
 		       ));
 
 
+
+  defvar("CaptchaTemplate",
+	 Variable.Text(CAPTCHA_TEMPLATE,
+		       0, "Captcha Template",
+		       "The template to be used for the captcha. "
+		       ":src: is replaced with the image path. "
+		       ":lock: is the hash that needs to be retured as \"lock\" "
+		       ":width: and :height: are the dimensions of the image"));
+
+  defvar("ComposeTemplate",
+	 Variable.Text(COMPOSE_TEMPLATE,
+		       0, "Compose Template",
+		       "The template to be used for the Email compose page. "
+		       ":send_location: is replaced with the path to post the form to "
+		       ":email_graphic: is replaced with a graphic of the desitnation address "
+		       ":captcha: is replaced by the captcha."
+		       "The form should contain fields name, email and comment"));
+  
+  defvar("EmailRegex",
+	 Variable.String("[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,4}", 0,
+			 "Email Regular Expression",
+			 "When asked to cloak all addresses on a page, this regular "
+			 "expression is used to find email addresses."));
+
+
   set_module_creator("Jeff Hungerford <hungerf3@house.ofdoom.com>");
   set_module_url("http://house.ofdoom.com/~hungerf3/roxen/mailcloak");
 }
 
 void start(int occasion, Configuration conf)
 {
-  module_dependencies(conf, ({ "graphic_text","email","html_wash" }));
-  set_my_db(QUERY(database));
+  module_dependencies(conf, ({ "email","html_wash","captcha" }));
+  set_my_db(query("database"));
   create_sql_tables( table_definitions );
   dbname=get_my_table("address",table_definitions->address);
 }
 
-/* Capcha Support */
-
-string rs(int len)
-{
-  //  array chr = "abcdefghjklmnpqrstuvwxyz23456789"/"";
-  array chr = "wku4vl7esq7pr5f2kubntwxhy9agvr54thd3l8sge6p2fzzmd8xm9j3"/"";
-  mapping d = localtime(time(1));
-  string output = "";
-  int offset;
-  int size = sizeof(chr);
-  offset = ((d["yday"]*24+d["hour"])%size);
-  output = chr[offset];
-  for (int i=1; i<len; i++)
-    {
-      output+=chr[random(size)];
-    }
-  return output;
-}
-
-int cs(string lock)
-{
-  string c1="";
-  string c2="";
-  int result=0;
-  array chr = "wku4vl7esq7pr5f2kubntwxhy9agvr54thd3l8sge6p2fzzmd8xm9j3"/"";
-
-  string key=String.trim_all_whites(lock)[0..0];
-
-  mapping d = localtime(time(1));
-  int i = d["yday"]*24+d["hour"];
-  c1=chr[i%sizeof(chr)];
-  c2=chr[(i-1)%sizeof(chr)];
-  if ((key[0]==c1[0])||
-      (key[0]==c2[0])) result=1;
-  return result;
-
-}
 
 string gen_chall(RequestID id)
 {
-  string output="";
-  string chall=rs(5);
-  output+="Please type these letters ";
-  output+="<input type='hidden' name='lock' value='"+hash(chall)+"'>";
-  output+=Roxen.parse_rxml("<gtext align=top alt=***** crop='t' fgcolor=grey bgcolor=white>"+chall+"</gtext>",id);
-  output+="<input size=6 type='text' name='key'><br>\n";
-  return output;
+  mapping chall = id->configuration()
+    ->find_module("captcha")
+    ->get_captcha(id);
+
+
+  return replace(query("CaptchaTemplate"),
+		 ([":lock:":(string)(chall["secret"]),
+		   ":src:":(string)(chall["url"]),
+		   ":width:":(string)(chall["image-width"]),
+		   ":height:":(string)(chall["image-height"])
+		 ])
+		 );
 }
 
 
-int check_chall(int lock, string key)
+int check_chall(string lock, string key, RequestID id)
 {
-  lock = (int) lock;
-  int  result = 0;
-  if (((int)lock)==((int)hash(String.trim_all_whites(lower_case(key)))))
-    {
-      if (cs(key))
-        {
-          result = 1;
-        }
-      else
-        {
-
-        }
-    }
-  return result;
-
+  return id->configuration()
+    ->find_module("captcha")
+    ->verify_captcha(key, lock);
 }
 
-int IsEmail(string s)
-{
-  int result=0;
-  mixed chunks=s/"@";
-  if (sizeof(chunks)==2)
-    {
-      result=has_value(chunks[1],".");
-    }
-  
-  return result;
-}
 
-string ScanInput(string s, RequestID id)
-{
-  string output="";
-  foreach ((s/"\n"), string line)
-    {
-      if (has_value(line,"@"))
-	{
-	  foreach((line/" "), string word)
-	    {
-	      if (IsEmail(word))
-		{
-		  output+=simpletag_mailcloak("mailcloak",0 ,word,id);
-		}
-	      else
-		{
-		  output+=word;
-		}
-	      output+=" ";
-	    }
-	}
-      else
-	{
-	  output+=line;
-	}
-      output+="\n";
-    }
-  return output;
-}
 
   string status()
   {
@@ -210,13 +170,23 @@ string simpletag_mailcloak(string name, mapping arg, string contents, RequestID 
 
 mapping|void filter(mapping|void result, RequestID id)
 {
-  return 0;
+  // Skip non HTML documents
   if(!result || !stringp(result->data) || !equal("text/html", result->type)) return 0;
+  // Skip if we are not supposed to scan for addresses
   if (has_index(id->misc,"mailcloak") && query("CloakAll")==0) return 0;
 
-  //  result->data=ScanInput(result->data,id);
-  //return result;
+  // Scan for addresses, and cloak all of them.
+  string _cloak_address(string address)
+  {
+    return simpletag_mailcloak("mailcloak",
+			       0,
+			       address,
+			       id);
+  };
 
+  result->data = Regexp.SimpleRegexp(query("EmailRegex"))
+    ->replace(result->data, _cloak_address);
+  return result;
 }
 
 mapping find_internal( string path, RequestID id )
@@ -237,7 +207,17 @@ mapping find_internal( string path, RequestID id )
 	    }
 	  else
 	    {
-	      return Roxen.http_string_answer(Roxen.parse_rxml("<html><head><title>Compose Email</title></head><body><center><table><form action='"+query_absolute_internal_location(id)+local_p[0]+"/send' method='post'><tr><td>To:</td><td><gtext scale='0.5' alt='cloaked'>"+get_email((int)local_p[0])+"</gtext></td></tr><tr><td>Your Name:</td><td><input type=text size=30 name=name /></td></tr><tr><td>Your Email:</td><td><input type=text size=30 name=email /></td></tr><tr><td>Your IP:</td><td>&client.ip;</td></tr><tr><td colspan=2>"+gen_chall(id)+"</td></tr><tr><td colspan=2><textarea name=comment rows=25 cols=40></textarea></td></tr><tr><td colspan=2><input type=submit value=send><br></td></tr></form></table></center></body></html>",id));
+	      return Roxen.http_string_answer(
+					      Roxen.parse_rxml(
+							       replace(query("ComposeTemplate"),
+								       ([":send_location:": query_absolute_internal_location(id)+local_p[0]+"/send",
+									 ":email_graphic:": Roxen.parse_rxml("<gtext-url>"+
+													     get_email((int)local_p[0])+
+													     "</gtext-url>",id),
+									 ":captcha:": gen_chall(id)
+								       ])),
+							       id)
+					      );
 	    }
 	  break;
 	  
@@ -249,10 +229,11 @@ mapping find_internal( string path, RequestID id )
 	    }
 	  else
 	    {
-	      if(check_chall((int)(id->variables["lock"]),id->variables["key"]))
+	      if(check_chall(id->variables["lock"],id->variables["key"], id))
 		{
 		  mail_sent_count++;
-		  return Roxen.http_string_answer(Roxen.parse_rxml("<html><head><title>mail sent</title></head><body><email subject='Mail from &form.name; via emailcloak' to='"+get_email((int)local_p[0])+"' from='&form.email;'><header name='X-Sending-IP' value='&client.ip;' /><wash-html unparagraphify='t' unlinkify='t'>&form.comment;</wash-html></email><center>Your message has been sent.<br>Please close this window.</center></body></html> ",id));
+		  Roxen.parse_rxml("<email subject='Mail from &form.name; via emailcloak' to='"+get_email((int)local_p[0])+"' from='&form.email;'><header name='X-Sending-IP' value='&client.ip;' /><wash-html unparagraphify='t' unlinkify='t'>&form.comment;</wash-html></email>",id);
+		  return Roxen.http_string_answer("<html><head><title>mail sent</title></head><body><center>Your message has been sent.<br>Please close this window.</center></body></html>");
 		}
 	      else
 		{

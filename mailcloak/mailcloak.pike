@@ -87,7 +87,7 @@ void create()
 
 void start(int occasion, Configuration conf)
 {
-  module_dependencies(conf, ({ "email","html_wash","captcha" }));
+  module_dependencies(conf, ({ "email","html_wash","captcha", "graphic_text" }));
   set_my_db(query("database"));
   create_sql_tables( table_definitions );
   dbname=get_my_table("address",table_definitions->address);

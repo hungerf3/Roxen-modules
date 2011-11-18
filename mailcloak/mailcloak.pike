@@ -24,7 +24,7 @@ private constant table_definitions =
 constant CAPTCHA_TEMPLATE = #"
 Please type these letters
 <input type='hidden' name='lock' value=':lock:'>
-img src=':src:' width=:width: height=:height:>
+<img src=':src:' width=:width: height=:height:>
 <input size=6 type='text' name='key'><br>\n";
   
 

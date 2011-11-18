@@ -1,7 +1,7 @@
 #include <module.h>
 inherit "module";
 
-constant cvs_version = "$Id: mailcloak.pike,v 1.15 2005/04/07 16:47:53 hungerf3 Exp $";
+constant cvs_version = "$Id:$";
 
 constant module_type = MODULE_TAG|MODULE_FILTER;
 constant thread_safe=1;
@@ -13,7 +13,7 @@ private string dbname;
 
 private constant table_definitions = 
   ([ "address": ({ "id  INT UNSIGNED PRIMARY KEY",
-		   "email char(64)"
+                   "email char(64)"
   })
   ]);
 
@@ -21,13 +21,15 @@ private constant table_definitions =
 
 // Templates
 
-constant CAPTCHA_TEMPLATE = #"Please type these letters
-		    <input type='hidden' name='lock' value=':lock:'>
-                    <img src=':src:' width=:width: height=:height:>
-		    <input size=6 type='text' name='key'><br>\n";
+constant CAPTCHA_TEMPLATE = #"
+Please type these letters
+<input type='hidden' name='lock' value=':lock:'>
+img src=':src:' width=:width: height=:height:>
+<input size=6 type='text' name='key'><br>\n";
   
 
-constant COMPOSE_TEMPLATE = #"<html><head><title>Compose Email</title></head><body>
+constant COMPOSE_TEMPLATE = #"
+<html><head><title>Compose Email</title></head><body>
 <center><table><form action=':send_location:' method='post'>
 <tr><td>To:</td><td>
 <img src=':email_graphic:'</td></tr><tr><td>
@@ -40,45 +42,45 @@ void create()
 {
   defvar("database",
          Variable.DatabaseChoice("local", VAR_INITIAL,
-				 "Database",
-				 "This is the database in which the "
-				 "email/id mapping is stored. local is "
-				 "suggested, unless you are using more "
-				 "than one front end, in which case "
-				 "you should use shared."
-				 ));
+                                 "Database",
+                                 "This is the database in which the "
+                                 "email/id mapping is stored. local is "
+                                 "suggested, unless you are using more "
+                                 "than one front end, in which case "
+                                 "you should use shared."
+                                 ));
   defvar("CloakAll",
-	 Variable.Flag(0, 0,"Cloak Everything",
-		       "If set, then this module will check for and cloak "
-		       "Email addresses on every page on this server, without "
-		       "needing to do anything else.  Leave this unset if you want "
-		       "to control what pages are cloaked."
-		       ));
+         Variable.Flag(0, 0,"Cloak Everything",
+                       "If set, then this module will check for and cloak "
+                       "Email addresses on every page on this server, without "
+                       "needing to do anything else.  Leave this unset if you want "
+                       "to control what pages are cloaked."
+                       ));
 
 
 
   defvar("CaptchaTemplate",
-	 Variable.Text(CAPTCHA_TEMPLATE,
-		       0, "Captcha Template",
-		       "The template to be used for the captcha. "
-		       ":src: is replaced with the image path. "
-		       ":lock: is the hash that needs to be retured as \"lock\" "
-		       ":width: and :height: are the dimensions of the image"));
+         Variable.Text(CAPTCHA_TEMPLATE,
+                       0, "Captcha Template",
+                       "The template to be used for the captcha. "
+                       ":src: is replaced with the image path. "
+                       ":lock: is the hash that needs to be retured as \"lock\" "
+                       ":width: and :height: are the dimensions of the image"));
 
   defvar("ComposeTemplate",
-	 Variable.Text(COMPOSE_TEMPLATE,
-		       0, "Compose Template",
-		       "The template to be used for the Email compose page. "
-		       ":send_location: is replaced with the path to post the form to "
-		       ":email_graphic: is replaced with a graphic of the desitnation address "
-		       ":captcha: is replaced by the captcha."
-		       "The form should contain fields name, email and comment"));
+         Variable.Text(COMPOSE_TEMPLATE,
+                       0, "Compose Template",
+                       "The template to be used for the Email compose page. "
+                       ":send_location: is replaced with the path to post the form to "
+                       ":email_graphic: is replaced with a graphic of the desitnation address "
+                       ":captcha: is replaced by the captcha."
+                       "The form should contain fields name, email and comment"));
   
   defvar("EmailRegex",
-	 Variable.String("[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,4}", 0,
-			 "Email Regular Expression",
-			 "When asked to cloak all addresses on a page, this regular "
-			 "expression is used to find email addresses."));
+         Variable.String("([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+)", 0,
+                         "Email Regular Expression",
+                         "When asked to cloak all addresses on a page, this regular "
+                         "expression is used to find email addresses."));
 
 
   set_module_creator("Jeff Hungerford <hungerf3@house.ofdoom.com>");
@@ -102,12 +104,12 @@ string gen_chall(RequestID id)
 
 
   return replace(query("CaptchaTemplate"),
-		 ([":lock:":(string)(chall["secret"]),
-		   ":src:":(string)(chall["url"]),
-		   ":width:":(string)(chall["image-width"]),
-		   ":height:":(string)(chall["image-height"])
-		 ])
-		 );
+                 ([":lock:":(string)(chall["secret"]),
+                   ":src:":(string)(chall["url"]),
+                   ":width:":(string)(chall["image-width"]),
+                   ":height:":(string)(chall["image-height"])
+                 ])
+                 );
 }
 
 
@@ -152,7 +154,7 @@ string get_email(int hash)
 string simpletag_mailcloakall(string name, mapping arg, string contents, RequestID id)
 {
   id->misc["mailcloak"]=1;
-  return 0;
+  return "<!-- Cloaking all addresses -->";;
 }
 
 string simpletag_mailcloak(string name, mapping arg, string contents, RequestID id)
@@ -172,20 +174,21 @@ mapping|void filter(mapping|void result, RequestID id)
 {
   // Skip non HTML documents
   if(!result || !stringp(result->data) || !equal("text/html", result->type)) return 0;
-  // Skip if we are not supposed to scan for addresses
-  if (has_index(id->misc,"mailcloak") && query("CloakAll")==0) return 0;
-
-  // Scan for addresses, and cloak all of them.
-  string _cloak_address(string address)
-  {
-    return simpletag_mailcloak("mailcloak",
-			       0,
-			       address,
-			       id);
-  };
-
-  result->data = Regexp.SimpleRegexp(query("EmailRegex"))
-    ->replace(result->data, _cloak_address);
+  // Are we supposed to scan for addresses?
+  if (has_index(id->misc,"mailcloak") || query("CloakAll")==1)
+    {
+      // Scan for addresses, and cloak all of them.
+      string _cloak_address(string address)
+      {
+        return simpletag_mailcloak("mailcloak",
+                                   0,
+                                   address,
+                                   id);
+      };
+      
+      result->data = Regexp.SimpleRegexp(query("EmailRegex"))
+        ->replace(result->data, _cloak_address);
+    }
   return result;
 }
 
@@ -199,53 +202,53 @@ mapping find_internal( string path, RequestID id )
       array(string) local_p = (path-query_absolute_internal_location(id))/"/";
       
       switch(local_p[1])
-	{
-	case "compose":
-	  if (is_hash_in_db((int)local_p[0])==0)
-	    {
-	      return Roxen.http_low_answer(400, "Unknown ID");
-	    }
-	  else
-	    {
-	      return Roxen.http_string_answer(
-					      Roxen.parse_rxml(
-							       replace(query("ComposeTemplate"),
-								       ([":send_location:": query_absolute_internal_location(id)+local_p[0]+"/send",
-									 ":email_graphic:": Roxen.parse_rxml("<gtext-url>"+
-													     get_email((int)local_p[0])+
-													     "</gtext-url>",id),
-									 ":captcha:": gen_chall(id)
-								       ])),
-							       id)
-					      );
-	    }
-	  break;
-	  
-	  
-	case "send":
-	  if (is_hash_in_db((int)local_p[0])==0)
-	    {
-	      return Roxen.http_low_answer(400, "Unknown ID");
-	    }
-	  else
-	    {
-	      if(check_chall(id->variables["lock"],id->variables["key"], id))
-		{
-		  mail_sent_count++;
-		  Roxen.parse_rxml("<email subject='Mail from &form.name; via emailcloak' to='"+get_email((int)local_p[0])+"' from='&form.email;'><header name='X-Sending-IP' value='&client.ip;' /><wash-html unparagraphify='t' unlinkify='t'>&form.comment;</wash-html></email>",id);
-		  return Roxen.http_string_answer("<html><head><title>mail sent</title></head><body><center>Your message has been sent.<br>Please close this window.</center></body></html>");
-		}
-	      else
-		{
-		  return Roxen.http_string_answer("<html><body>Wrong Code. Ip flagged.</body></html>");
-		}
-	    }
-	  break;
-	  
-	default:
-	  return Roxen.http_low_answer(400, "Unknown task");
-	  
-	}
+        {
+        case "compose":
+          if (is_hash_in_db((int)local_p[0])==0)
+            {
+              return Roxen.http_low_answer(400, "Unknown ID");
+            }
+          else
+            {
+              return Roxen.http_string_answer(
+                                              Roxen.parse_rxml(
+                                                               replace(query("ComposeTemplate"),
+                                                                       ([":send_location:": query_absolute_internal_location(id)+local_p[0]+"/send",
+                                                                         ":email_graphic:": Roxen.parse_rxml("<gtext-url>"+
+                                                                                                             get_email((int)local_p[0])+
+                                                                                                             "</gtext-url>",id),
+                                                                         ":captcha:": gen_chall(id)
+                                                                       ])),
+                                                               id)
+                                              );
+            }
+          break;
+          
+          
+        case "send":
+          if (is_hash_in_db((int)local_p[0])==0)
+            {
+              return Roxen.http_low_answer(400, "Unknown ID");
+            }
+          else
+            {
+              if(check_chall(id->variables["lock"],id->variables["key"], id))
+                {
+                  mail_sent_count++;
+                  Roxen.parse_rxml("<email subject='Mail from &form.name; via emailcloak' to='"+get_email((int)local_p[0])+"' from='&form.email;'><header name='X-Sending-IP' value='&client.ip;' /><wash-html unparagraphify='t' unlinkify='t'>&form.comment;</wash-html></email>",id);
+                  return Roxen.http_string_answer("<html><head><title>mail sent</title></head><body><center>Your message has been sent.<br>Please close this window.</center></body></html>");
+                }
+              else
+                {
+                  return Roxen.http_string_answer("<html><body>Wrong Code. Ip flagged.</body></html>");
+                }
+            }
+          break;
+          
+        default:
+          return Roxen.http_low_answer(400, "Unknown task");
+          
+        }
       
       break;
       

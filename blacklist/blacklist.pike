@@ -45,7 +45,7 @@ void create(Configuration|void conf)
   blocked=0;
   whitelist=0;
   set_module_creator("Jeff Hungerford <hungerf3@house.ofdoom.com>");
-  set_module_url("http://house.ofdoom.com/~hungerf3/roxen/mailcloak");
+  set_module_url("http://house.ofdoom.com/~hungerf3/roxen/blacklist");
   
   defvar("Deny",
 	 Variable.StringList(({}),VAR_INITIAL,

@@ -63,18 +63,22 @@ void create()
          Variable.Text(CAPTCHA_TEMPLATE,
                        0, "Captcha Template",
                        "The template to be used for the captcha. "
-                       ":src: is replaced with the image path. "
-                       ":lock: is the hash that needs to be retured as \"lock\" "
-                       ":width: and :height: are the dimensions of the image"));
+		       "<ul>"
+                       "<li><tt>:src:</tt> is replaced with the image path. "
+                       "<li><tt>:lock:</tt> is the hash that needs to be retured as \"lock\" "
+                       "<li><tt>:width:</tt> and <tt>:height:</tt> are the dimensions of the image"
+		       "</ul>"));
 
   defvar("ComposeTemplate",
          Variable.Text(COMPOSE_TEMPLATE,
                        0, "Compose Template",
                        "The template to be used for the Email compose page. "
-                       ":send_location: is replaced with the path to post the form to "
-                       ":email_graphic: is replaced with a graphic of the desitnation address "
-                       ":captcha: is replaced by the captcha."
-                       "The form should contain fields name, email and comment"));
+		       "<ul>"
+                       "<li><tt>:send_location:</tt> is replaced with the path to post the form to "
+                       "<li><tt>:email_graphic:</tt> is replaced with a graphic of the desitnation address "
+                       "<li><tt>:captcha:</tt> is replaced by the captcha."
+		       "</ul>"
+                       "The form should contain fields <tt>name</tt>, <tt>email</tt> and <tt>comment</tt>"));
   
   defvar("EmailRegex",
          Variable.String("([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+)", 0,
@@ -121,10 +125,9 @@ int check_chall(string lock, string key, RequestID id)
 }
 
 
-
-  string status()
-  {
-  return "Cloaked Addresses: "+count_cloaked_addresses()+"<br>Messages Sent: "+mail_sent_count;
+string status()
+{
+  return "Cloaked Addresses: " + count_cloaked_addresses() + "<br>Messages Sent: " + mail_sent_count;
 }
 
 int count_cloaked_addresses()
@@ -139,8 +142,8 @@ int is_hash_in_db(int hash)
 
 void store_email(string email)
 {
-  int email_hash=hash(email);
-  if (is_hash_in_db(email_hash)==0) 
+  int email_hash = hash(email);
+  if (is_hash_in_db(email_hash) == 0) 
     {
       sql_query(sprintf("insert into %s (id,email) values(%d,'%s');",dbname,email_hash,Sql.sql_util.quote(email)));
     }
@@ -153,20 +156,26 @@ string get_email(int hash)
 
 string simpletag_mailcloakall(string name, mapping arg, string contents, RequestID id)
 {
-  id->misc["mailcloak"]=1;
+  id->misc["mailcloak"] = 1;
   return "<!-- Cloaking all addresses -->";;
 }
 
 string simpletag_mailcloak(string name, mapping arg, string contents, RequestID id)
 {
-  string use_args=" ";
+  string use_args = " ";
   if(arg)
     {
       if (arg["fgcolor"]) use_args+="fgcolor="+arg["fgcolor"]+" ";
       if (arg["bgcolor"]) use_args+="bgcolor="+arg["bgcolor"]+" ";
     }
   store_email(contents);
-  return  Roxen.parse_rxml("<A target='_new'  HREF='" + query_absolute_internal_location(id) +hash(contents)+"/compose'><gtext format='png'" + use_args +" scale=0.5 alt='click to email'>"+contents+"</gtext></A>",id);
+  return  Roxen.parse_rxml("<A target='_new'  HREF='" +
+			   query_absolute_internal_location(id) +hash(contents) + 
+			   "/compose'><gtext format='png'" +
+			   use_args + 
+			   " scale=0.5 alt='click to email'>" + 
+			   contents + 
+			   "</gtext></A>",id);
   
 }
 
@@ -212,13 +221,13 @@ mapping find_internal( string path, RequestID id )
             {
               return Roxen.http_string_answer(
                                               Roxen.parse_rxml(
-                                                               replace(query("ComposeTemplate"),
-                                                                       ([":send_location:": query_absolute_internal_location(id)+local_p[0]+"/send",
-                                                                         ":email_graphic:": Roxen.parse_rxml("<gtext-url>"+
-                                                                                                             get_email((int)local_p[0])+
-                                                                                                             "</gtext-url>",id),
-                                                                         ":captcha:": gen_chall(id)
-                                                                       ])),
+                                                               replace ( query("ComposeTemplate"),
+									 ([":send_location:": query_absolute_internal_location(id)+local_p[0]+"/send",
+									   ":email_graphic:": Roxen.parse_rxml("<gtext-url>"+
+													       get_email((int)local_p[0])+
+													       "</gtext-url>",id),
+									   ":captcha:": gen_chall(id)
+									 ])),
                                                                id)
                                               );
             }
@@ -226,16 +235,20 @@ mapping find_internal( string path, RequestID id )
           
           
         case "send":
-          if (is_hash_in_db((int)local_p[0])==0)
+          if (is_hash_in_db((int)local_p[0]) == 0)
             {
               return Roxen.http_low_answer(400, "Unknown ID");
             }
           else
             {
-              if(check_chall(id->variables["lock"],id->variables["key"], id))
+              if(check_chall(id->variables["lock"],
+			     id->variables["key"],
+			     id))
                 {
                   mail_sent_count++;
-                  Roxen.parse_rxml("<email subject='Mail from &form.name; via emailcloak' to='"+get_email((int)local_p[0])+"' from='&form.email;'><header name='X-Sending-IP' value='&client.ip;' /><wash-html unparagraphify='t' unlinkify='t'>&form.comment;</wash-html></email>",id);
+                  Roxen.parse_rxml("<email subject='Mail from &form.name; via emailcloak' to='" + 
+				   get_email((int)local_p[0]) + 
+				   "' from='&form.email;'><header name='X-Sending-IP' value='&client.ip;' /><wash-html unparagraphify='t' unlinkify='t'>&form.comment;</wash-html></email>",id);
                   return Roxen.http_string_answer("<html><head><title>mail sent</title></head><body><center>Your message has been sent.<br>Please close this window.</center></body></html>");
                 }
               else

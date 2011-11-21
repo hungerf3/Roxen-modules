@@ -2,4 +2,7 @@ Extension modules for the Roxen Webserver.
 
 http://www.roxen.com/
 
+blacklist: Restrict access based on DNS blacklists
+delay_sql: Trigger background execution of a SQL statement from a webpage.
+mailcloak: Convert email addresses to graphics, and provides a captcha protected web form. 
 
